@@ -25,6 +25,10 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.input.MouseButton;
+import javafx.scene.text.Font;
 
 public class ViewerUI extends Application {
 
@@ -79,231 +83,23 @@ public class ViewerUI extends Application {
     // View dimensions (fixed for consistency)
     private static final double VIEW_SIZE = 350.0;
 
-    // Enhanced Crosshair Overlay Class
-    public static class CrosshairOverlay extends Pane {
-        private Line axisX = new Line(); // Horizontal line
-        private Line axisY = new Line(); // Vertical line
-        private Circle centerPoint = new Circle(6); // Draggable center point
-        private String viewType;
-        private boolean isDraggingCenter = false;
-        private boolean isDraggingAxisX = false;
-        private boolean isDraggingAxisY = false;
-        private double lastMouseX, lastMouseY;
-        
-        // Colors for different axis lines based on anatomical planes
-        private Color axisXColor = Color.RED;    // Coronal intersection
-        private Color axisYColor = Color.LIME;   // Sagittal intersection
-        
-        public CrosshairOverlay(String viewType) {
-            this.viewType = viewType;
-            
-            // Configure axis lines
-            setupAxisLine(axisX, axisXColor);
-            setupAxisLine(axisY, axisYColor);
-            
-            // Configure center point
-            centerPoint.setFill(Color.WHITE);
-            centerPoint.setStroke(Color.BLACK);
-            centerPoint.setStrokeWidth(2);
-            centerPoint.setRadius(6);
-            
-            // Set colors based on view type
-            setColorsForView(viewType);
-            
-            // Add all elements to the pane
-            getChildren().addAll(axisX, axisY, centerPoint);
-            
-            // Make the pane transparent for mouse events to pass through when not over crosshair elements
-            setPickOnBounds(false);
-            
-            setupMouseHandlers();
-        }
-        
-        private void setColorsForView(String viewType) {
-            switch (viewType.toLowerCase()) {
-                case "axial":
-                    axisXColor = Color.RED;      // Coronal plane intersection (red)
-                    axisYColor = Color.BLUE;     // Sagittal plane intersection (blue)
-                    break;
-                case "coronal":
-                    axisXColor = Color.BLUE;     // Sagittal plane intersection (blue)
-                    axisYColor = Color.LIME;     // Axial plane intersection (green)
-                    break;
-                case "sagittal":
-                    axisXColor = Color.RED;      // Coronal plane intersection (red)
-                    axisYColor = Color.LIME;     // Axial plane intersection (green)
-                    break;
-            }
-            axisX.setStroke(axisXColor);
-            axisY.setStroke(axisYColor);
-        }
-        
-        private void setupAxisLine(Line line, Color color) {
-            line.setStroke(color);
-            line.setStrokeWidth(2);
-            line.getStrokeDashArray().clear(); // Solid lines for main crosshair
-            line.setMouseTransparent(false);
-        }
-        
-        private void setupMouseHandlers() {
-            // Center point mouse handlers
-            centerPoint.setOnMousePressed(e -> {
-                isDraggingCenter = true;
-                lastMouseX = e.getX();
-                lastMouseY = e.getY();
-                e.consume();
-            });
-            
-            centerPoint.setOnMouseDragged(e -> {
-                if (isDraggingCenter) {
-                    onCenterPointDragged(e.getX(), e.getY());
-                    e.consume();
-                }
-            });
-            
-            centerPoint.setOnMouseReleased(e -> {
-                isDraggingCenter = false;
-                e.consume();
-            });
-            
-            // Axis X line mouse handlers
-            axisX.setOnMousePressed(e -> {
-                isDraggingAxisX = true;
-                lastMouseX = e.getX();
-                lastMouseY = e.getY();
-                e.consume();
-            });
-            
-            axisX.setOnMouseDragged(e -> {
-                if (isDraggingAxisX) {
-                    onAxisXDragged(e.getY()); // Y coordinate for horizontal line
-                    e.consume();
-                }
-            });
-            
-            axisX.setOnMouseReleased(e -> {
-                isDraggingAxisX = false;
-                e.consume();
-            });
-            
-            // Axis Y line mouse handlers
-            axisY.setOnMousePressed(e -> {
-                isDraggingAxisY = true;
-                lastMouseX = e.getX();
-                lastMouseY = e.getY();
-                e.consume();
-            });
-            
-            axisY.setOnMouseDragged(e -> {
-                if (isDraggingAxisY) {
-                    onAxisYDragged(e.getX()); // X coordinate for vertical line
-                    e.consume();
-                }
-            });
-            
-            axisY.setOnMouseReleased(e -> {
-                isDraggingAxisY = false;
-                e.consume();
-            });
-        }
-        
-        private void onCenterPointDragged(double x, double y) {
-            // This will be connected to the main viewer's crosshair update logic
-            if (getParent() instanceof StackPane) {
-                StackPane parent = (StackPane) getParent();
-                if (parent.getParent() instanceof VBox) {
-                    // Fire a custom event or call back to main viewer
-                    fireCrosshairMoved(x, y, "center");
-                }
-            }
-        }
-        
-        private void onAxisXDragged(double y) {
-            fireCrosshairMoved(centerPoint.getCenterX(), y, "axisX");
-        }
-        
-        private void onAxisYDragged(double x) {
-            fireCrosshairMoved(x, centerPoint.getCenterY(), "axisY");
-        }
-        
-        private void fireCrosshairMoved(double x, double y, String dragType) {
-            // Create a custom event to notify the main viewer
-            fireEvent(new CrosshairMoveEvent(x, y, viewType, dragType));
-        }
-        
-        public void updatePosition(double x, double y) {
-            // Update axis lines
-            axisX.setStartX(0);
-            axisX.setEndX(getWidth() > 0 ? getWidth() : VIEW_SIZE);
-            axisX.setStartY(y);
-            axisX.setEndY(y);
-            
-            axisY.setStartX(x);
-            axisY.setEndX(x);
-            axisY.setStartY(0);
-            axisY.setEndY(getHeight() > 0 ? getHeight() : VIEW_SIZE);
-            
-            // Update center point
-            centerPoint.setCenterX(x);
-            centerPoint.setCenterY(y);
-        }
-        
-        public void setAxisLinesVisible(boolean visible) {
-            axisX.setVisible(visible);
-            axisY.setVisible(visible);
-        }
-        
-        public void setCenterPointVisible(boolean visible) {
-            centerPoint.setVisible(visible);
-        }
-        
-        public void setAllVisible(boolean visible) {
-            setVisible(visible);
-            axisX.setVisible(visible);
-            axisY.setVisible(visible);
-            centerPoint.setVisible(visible);
-        }
-    }
-    
-    // Custom event for crosshair movement
-    public static class CrosshairMoveEvent extends javafx.event.Event {
-        public static final javafx.event.EventType<CrosshairMoveEvent> CROSSHAIR_MOVED = 
-            new javafx.event.EventType<>(javafx.event.Event.ANY, "CROSSHAIR_MOVED");
-            
-        private final double x, y;
-        private final String viewType;
-        private final String dragType;
-        
-        public CrosshairMoveEvent(double x, double y, String viewType, String dragType) {
-            super(CROSSHAIR_MOVED);
-            this.x = x;
-            this.y = y;
-            this.viewType = viewType;
-            this.dragType = dragType;
-        }
-        
-        public double getX() { return x; }
-        public double getY() { return y; }
-        public String getViewType() { return viewType; }
-        public String getDragType() { return dragType; }
-    }
-
-    // DICOM slice data structure
-    public static class DicomSlice {
-        public BufferedImage image;
-        public short[][] pixelData; // Raw pixel values for MPR
-        public double[] imagePosition = new double[3]; // (0020,0032)
-        public double[] imageOrientation = new double[6]; // (0020,0037)
-        public double[] pixelSpacing = new double[2]; // (0028,0030)
-        public double sliceThickness = 1.0;
-        public int rows, columns;
-        public String instanceUID;
-        public int sliceLocation;
-
-        // Window/Level for display
-        public double windowCenter = 128;
-        public double windowWidth = 256;
-    }
+    // Measurement tool state for all planes
+    private boolean measurementMode = false;
+    // Axial
+    private List<Measurement> axialMeasurements = new ArrayList<>();
+    private Measurement currentAxialMeasurement = null;
+    private Canvas axialMeasurementCanvas;
+    // Coronal
+    private List<Measurement> coronalMeasurements = new ArrayList<>();
+    private Measurement currentCoronalMeasurement = null;
+    private Canvas coronalMeasurementCanvas;
+    // Sagittal
+    private List<Measurement> sagittalMeasurements = new ArrayList<>();
+    private Measurement currentSagittalMeasurement = null;
+    private Canvas sagittalMeasurementCanvas;
+    // Toolbar buttons
+    private Button measurementToolButton;
+    private Button clearMeasurementsButton;
 
     public static void main(String[] args) {
         launch(args);
@@ -318,10 +114,29 @@ public class ViewerUI extends Application {
         sagittalCrosshair = new CrosshairOverlay("sagittal");
         axialCrosshair = new CrosshairOverlay("axial");
 
-        // Setup view panes with enhanced crosshairs
-        StackPane coronalPane = createEnhancedViewPane(coronalView, coronalCrosshair, "lightblue");
-        StackPane sagittalPane = createEnhancedViewPane(sagittalView, sagittalCrosshair, "lightgreen");
-        StackPane axialPane = createEnhancedViewPane(axialView, axialCrosshair, "lightcoral");
+        // Create measurement overlays for all views
+        axialMeasurementCanvas = new Canvas(VIEW_SIZE, VIEW_SIZE);
+        axialMeasurementCanvas.widthProperty().bind(axialView.fitWidthProperty());
+        axialMeasurementCanvas.heightProperty().bind(axialView.fitHeightProperty());
+        coronalMeasurementCanvas = new Canvas(VIEW_SIZE, VIEW_SIZE);
+        coronalMeasurementCanvas.widthProperty().bind(coronalView.fitWidthProperty());
+        coronalMeasurementCanvas.heightProperty().bind(coronalView.fitHeightProperty());
+        sagittalMeasurementCanvas = new Canvas(VIEW_SIZE, VIEW_SIZE);
+        sagittalMeasurementCanvas.widthProperty().bind(sagittalView.fitWidthProperty());
+        sagittalMeasurementCanvas.heightProperty().bind(sagittalView.fitHeightProperty());
+        // Add to StackPanes after crosshair
+        StackPane axialPane = new StackPane();
+        axialPane.getChildren().addAll(axialView, axialCrosshair, axialMeasurementCanvas);
+        axialPane.setStyle("-fx-background-color: lightcoral;");
+        axialPane.setPrefSize(VIEW_SIZE, VIEW_SIZE);
+        StackPane coronalPane = new StackPane();
+        coronalPane.getChildren().addAll(coronalView, coronalCrosshair, coronalMeasurementCanvas);
+        coronalPane.setStyle("-fx-background-color: lightblue;");
+        coronalPane.setPrefSize(VIEW_SIZE, VIEW_SIZE);
+        StackPane sagittalPane = new StackPane();
+        sagittalPane.getChildren().addAll(sagittalView, sagittalCrosshair, sagittalMeasurementCanvas);
+        sagittalPane.setStyle("-fx-background-color: lightgreen;");
+        sagittalPane.setPrefSize(VIEW_SIZE, VIEW_SIZE);
 
         // Create sliders for manual slice navigation
         setupSliders();
@@ -346,6 +161,13 @@ public class ViewerUI extends Application {
         // Create enhanced toolbar
         ToolBar toolbar = createEnhancedToolbar(primaryStage);
 
+        // Add measurement tool buttons to toolbar
+        measurementToolButton = new Button("Measurement Tool");
+        measurementToolButton.setOnAction(e -> toggleMeasurementMode());
+        clearMeasurementsButton = new Button("Clear Measurements");
+        clearMeasurementsButton.setOnAction(e -> clearMeasurements());
+        toolbar.getItems().addAll(new Separator(), measurementToolButton, clearMeasurementsButton);
+
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
         root.setCenter(viewContainer);
@@ -355,6 +177,7 @@ public class ViewerUI extends Application {
 
         setupEnhancedCrosshairInteractions();
         setupToolbarActions();
+        setupMeasurementTool();
     }
 
     private StackPane createEnhancedViewPane(ImageView imageView, CrosshairOverlay crosshair, String backgroundColor) {
@@ -410,12 +233,12 @@ public class ViewerUI extends Application {
 
     private void setupEnhancedCrosshairInteractions() {
         // Add event handlers for custom crosshair move events
-        coronalCrosshair.addEventHandler(CrosshairMoveEvent.CROSSHAIR_MOVED, 
-            e -> handleCrosshairMove(e));
-        sagittalCrosshair.addEventHandler(CrosshairMoveEvent.CROSSHAIR_MOVED, 
-            e -> handleCrosshairMove(e));
-        axialCrosshair.addEventHandler(CrosshairMoveEvent.CROSSHAIR_MOVED, 
-            e -> handleCrosshairMove(e));
+        coronalCrosshair.addEventHandler(CrosshairOverlay.CrosshairMoveEvent.CROSSHAIR_MOVED, 
+            e -> handleCrosshairMove((CrosshairOverlay.CrosshairMoveEvent) e));
+        sagittalCrosshair.addEventHandler(CrosshairOverlay.CrosshairMoveEvent.CROSSHAIR_MOVED, 
+            e -> handleCrosshairMove((CrosshairOverlay.CrosshairMoveEvent) e));
+        axialCrosshair.addEventHandler(CrosshairOverlay.CrosshairMoveEvent.CROSSHAIR_MOVED, 
+            e -> handleCrosshairMove((CrosshairOverlay.CrosshairMoveEvent) e));
 
         // Also keep the original click handlers for areas outside crosshair elements
         coronalView.setOnMouseClicked(e -> {
@@ -437,7 +260,7 @@ public class ViewerUI extends Application {
         });
     }
 
-    private void handleCrosshairMove(CrosshairMoveEvent event) {
+    private void handleCrosshairMove(CrosshairOverlay.CrosshairMoveEvent event) {
         if (isUpdatingSliders) return;
         
         String viewType = event.getViewType();
@@ -1009,6 +832,7 @@ public class ViewerUI extends Application {
         }
         
         updateSliceDisplay();
+        redrawAxialMeasurements();
     }
 
     private void updateCoronalSlice(int rowIndex) {
@@ -1026,6 +850,7 @@ public class ViewerUI extends Application {
         }
         
         updateSliceDisplay();
+        redrawCoronalMeasurements();
     }
 
     private void updateSagittalSlice(int columnIndex) {
@@ -1043,6 +868,7 @@ public class ViewerUI extends Application {
         }
         
         updateSliceDisplay();
+        redrawSagittalMeasurements();
     }
 
     private BufferedImage generateCoronalSlice(int rowIndex) {
@@ -1269,4 +1095,154 @@ public class ViewerUI extends Application {
         
         isUpdatingSliders = false;
     }
+
+    private void setupMeasurementTool() {
+        // Axial
+        setupMeasurementCanvas(axialMeasurementCanvas, axialMeasurements, () -> dicomSlices.isEmpty() ? null : dicomSlices.get(currentAxialSlice),
+            (x1, y1, x2, y2) -> calculateAxialDistanceInMM(x1, y1, x2, y2),
+            m -> currentAxialMeasurement = m, () -> currentAxialMeasurement, () -> { currentAxialMeasurement = null; redrawAxialMeasurements(); });
+        axialMeasurementCanvas.setMouseTransparent(true);
+        // Coronal
+        setupMeasurementCanvas(coronalMeasurementCanvas, coronalMeasurements, () -> dicomSlices.isEmpty() ? null : dicomSlices.get(0),
+            (x1, y1, x2, y2) -> calculateCoronalDistanceInMM(x1, y1, x2, y2),
+            m -> currentCoronalMeasurement = m, () -> currentCoronalMeasurement, () -> { currentCoronalMeasurement = null; redrawCoronalMeasurements(); });
+        coronalMeasurementCanvas.setMouseTransparent(true);
+        // Sagittal
+        setupMeasurementCanvas(sagittalMeasurementCanvas, sagittalMeasurements, () -> dicomSlices.isEmpty() ? null : dicomSlices.get(0),
+            (x1, y1, x2, y2) -> calculateSagittalDistanceInMM(x1, y1, x2, y2),
+            m -> currentSagittalMeasurement = m, () -> currentSagittalMeasurement, () -> { currentSagittalMeasurement = null; redrawSagittalMeasurements(); });
+        sagittalMeasurementCanvas.setMouseTransparent(true);
+    }
+
+    // Helper for setting up measurement canvas
+    private void setupMeasurementCanvas(Canvas canvas, List<Measurement> measurements, java.util.function.Supplier<DicomSlice> sliceSupplier,
+                                        DistanceCalculator distanceCalculator,
+                                        java.util.function.Consumer<Measurement> setCurrent,
+                                        java.util.function.Supplier<Measurement> getCurrent,
+                                        Runnable clearCurrent) {
+        canvas.setOnMousePressed(e -> {
+            if (!measurementMode || sliceSupplier.get() == null || e.getButton() != MouseButton.PRIMARY) return;
+            double x = e.getX();
+            double y = e.getY();
+            setCurrent.accept(new Measurement(x, y));
+        });
+        canvas.setOnMouseDragged(e -> {
+            if (!measurementMode || getCurrent.get() == null) return;
+            getCurrent.get().x2 = e.getX();
+            getCurrent.get().y2 = e.getY();
+            redrawAllMeasurements();
+        });
+        canvas.setOnMouseReleased(e -> {
+            if (!measurementMode || getCurrent.get() == null) return;
+            getCurrent.get().x2 = e.getX();
+            getCurrent.get().y2 = e.getY();
+            if (getCurrent.get().isValid()) {
+                measurements.add(getCurrent.get());
+            }
+            clearCurrent.run();
+            redrawAllMeasurements();
+        });
+    }
+
+    // Toggle measurement mode for all planes
+    private void toggleMeasurementMode() {
+        measurementMode = !measurementMode;
+        measurementToolButton.setStyle(measurementMode ? "-fx-background-color: yellow;" : "");
+        axialMeasurementCanvas.setMouseTransparent(!measurementMode);
+        coronalMeasurementCanvas.setMouseTransparent(!measurementMode);
+        sagittalMeasurementCanvas.setMouseTransparent(!measurementMode);
+        if (measurementMode) {
+            crosshairTool.setSelected(false);
+        }
+    }
+
+    // Clear all measurements
+    private void clearMeasurements() {
+        axialMeasurements.clear();
+        coronalMeasurements.clear();
+        sagittalMeasurements.clear();
+        redrawAllMeasurements();
+    }
+
+    // Redraw all overlays
+    private void redrawAllMeasurements() {
+        redrawAxialMeasurements();
+        redrawCoronalMeasurements();
+        redrawSagittalMeasurements();
+    }
+
+    private void redrawAxialMeasurements() {
+        GraphicsContext gc = axialMeasurementCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, axialMeasurementCanvas.getWidth(), axialMeasurementCanvas.getHeight());
+        for (Measurement m : axialMeasurements) drawMeasurement(gc, m, (x1, y1, x2, y2) -> calculateAxialDistanceInMM(x1, y1, x2, y2));
+        if (currentAxialMeasurement != null) drawMeasurement(gc, currentAxialMeasurement, (x1, y1, x2, y2) -> calculateAxialDistanceInMM(x1, y1, x2, y2));
+    }
+
+    private void redrawCoronalMeasurements() {
+        GraphicsContext gc = coronalMeasurementCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, coronalMeasurementCanvas.getWidth(), coronalMeasurementCanvas.getHeight());
+        for (Measurement m : coronalMeasurements) drawMeasurement(gc, m, (x1, y1, x2, y2) -> calculateCoronalDistanceInMM(x1, y1, x2, y2));
+        if (currentCoronalMeasurement != null) drawMeasurement(gc, currentCoronalMeasurement, (x1, y1, x2, y2) -> calculateCoronalDistanceInMM(x1, y1, x2, y2));
+    }
+
+    private void redrawSagittalMeasurements() {
+        GraphicsContext gc = sagittalMeasurementCanvas.getGraphicsContext2D();
+        gc.clearRect(0, 0, sagittalMeasurementCanvas.getWidth(), sagittalMeasurementCanvas.getHeight());
+        for (Measurement m : sagittalMeasurements) drawMeasurement(gc, m, (x1, y1, x2, y2) -> calculateSagittalDistanceInMM(x1, y1, x2, y2));
+        if (currentSagittalMeasurement != null) drawMeasurement(gc, currentSagittalMeasurement, (x1, y1, x2, y2) -> calculateSagittalDistanceInMM(x1, y1, x2, y2));
+    }
+
+    // Draw a measurement with distance label
+    private void drawMeasurement(GraphicsContext gc, Measurement m, DistanceCalculator calc) {
+        gc.setStroke(Color.YELLOW);
+        gc.setLineWidth(2.0);
+        gc.strokeLine(m.x1, m.y1, m.x2, m.y2);
+        gc.setFill(Color.ORANGE);
+        gc.fillOval(m.x1 - 3, m.y1 - 3, 6, 6);
+        gc.fillOval(m.x2 - 3, m.y2 - 3, 6, 6);
+        double dist = calc.calculate(m.x1, m.y1, m.x2, m.y2);
+        String label = String.format("%.2f mm", dist);
+        double labelX = (m.x1 + m.x2) / 2 + 8;
+        double labelY = (m.y1 + m.y2) / 2 - 8;
+        gc.setFont(Font.font(16));
+        gc.setFill(Color.BLACK);
+        gc.fillText(label, labelX + 1, labelY + 1);
+        gc.setFill(Color.YELLOW);
+        gc.fillText(label, labelX, labelY);
+    }
+
+    // Distance calculation for each plane
+    private double calculateAxialDistanceInMM(double x1, double y1, double x2, double y2) {
+        if (dicomSlices.isEmpty()) return 0.0;
+        DicomSlice slice = dicomSlices.get(currentAxialSlice);
+        double dx = (x2 - x1) * slice.pixelSpacing[0] * slice.columns / VIEW_SIZE;
+        double dy = (y2 - y1) * slice.pixelSpacing[1] * slice.rows / VIEW_SIZE;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    private double calculateCoronalDistanceInMM(double x1, double y1, double x2, double y2) {
+        if (dicomSlices.isEmpty()) return 0.0;
+        DicomSlice slice = dicomSlices.get(0);
+        double dx = (x2 - x1) * slice.pixelSpacing[0] * volumeWidth / VIEW_SIZE;
+        double dz = (y2 - y1) * sliceThickness * volumeDepth / VIEW_SIZE;
+        return Math.sqrt(dx * dx + dz * dz);
+    }
+
+    private double calculateSagittalDistanceInMM(double x1, double y1, double x2, double y2) {
+        if (dicomSlices.isEmpty()) return 0.0;
+        DicomSlice slice = dicomSlices.get(0);
+        double dy = (x2 - x1) * slice.pixelSpacing[1] * volumeHeight / VIEW_SIZE;
+        double dz = (y2 - y1) * sliceThickness * volumeDepth / VIEW_SIZE;
+        return Math.sqrt(dy * dy + dz * dz);
+    }
+
+    // Helper class for measurement lines
+    private static class Measurement {
+        double x1, y1, x2, y2;
+        Measurement(double x1, double y1) { this.x1 = x1; this.y1 = y1; this.x2 = x1; this.y2 = y1; }
+        boolean isValid() { return Math.abs(x2 - x1) > 2 || Math.abs(y2 - y1) > 2; }
+    }
+
+    // Functional interface for distance calculation
+    private interface DistanceCalculator { double calculate(double x1, double y1, double x2, double y2); }
 }
