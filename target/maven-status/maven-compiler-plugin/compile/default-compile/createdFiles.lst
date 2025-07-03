@@ -1,0 +1,4 @@
+com\dicom\viewer\ViewerUI$CrosshairOverlay.class
+com\dicom\viewer\ViewerUI$CrosshairMoveEvent.class
+com\dicom\viewer\ViewerUI$DicomSlice.class
+com\dicom\viewer\ViewerUI.class
